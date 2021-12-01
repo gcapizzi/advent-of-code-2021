@@ -5,36 +5,28 @@ use std::io::BufReader;
 
 fn main() -> Result<()> {
     let depths = read_depths("input.txt")?;
-    println!("{}", count_increases(&depths));
+    println!("{}", count_increases(depths.iter().copied()));
     println!("{}", count_three_window_increases(&depths));
     Ok(())
 }
 
 fn count_three_window_increases(depths: &Vec<i32>) -> i32 {
-    let mut previous_depth = i32::MAX;
-    let mut count = 0;
-    for ((d1, d2), d3) in depths
+    let sums = depths
         .iter()
         .zip(depths.iter().skip(1))
         .zip(depths.iter().skip(2))
-    {
-        let sum = d1 + d2 + d3;
-        if sum > previous_depth {
-            count += 1;
-        }
-        previous_depth = sum;
-    }
-    count
+        .map(|((n1, n2), n3)| n1 + n2 + n3);
+    count_increases(sums)
 }
 
-fn count_increases(depths: &Vec<i32>) -> i32 {
-    let mut previous_depth = i32::MAX;
+fn count_increases<I: IntoIterator<Item = i32>>(ns: I) -> i32 {
+    let mut prev = i32::MAX;
     let mut count = 0;
-    for depth in depths {
-        if depth > &previous_depth {
+    for n in ns {
+        if n > prev {
             count += 1;
         }
-        previous_depth = *depth;
+        prev = n;
     }
     count
 }
