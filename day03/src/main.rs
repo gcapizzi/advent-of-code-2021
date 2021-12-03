@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fs::File;
+use std::hash::Hash;
 use std::io::prelude::*;
 use std::io::BufReader;
 
@@ -52,16 +53,27 @@ fn least_common_chars(strings: &Vec<String>) -> Result<String> {
 }
 
 fn most_common_string(strings: &Vec<String>) -> Result<String> {
+    select_string_by_char(strings, most_common_char, '1')
+}
+
+fn least_common_string(strings: &Vec<String>) -> Result<String> {
+    select_string_by_char(strings, least_common_char, '0')
+}
+
+fn select_string_by_char<F>(strings: &Vec<String>, select_char: F, default: char) -> Result<String>
+where
+    F: Fn(Vec<char>) -> Result<char>,
+{
     let mut result: Vec<String> = strings.to_owned();
     let mut i = 0;
     while result.len() > 1 {
-        let mcc = most_common_char(chars_at(i, &result)?).unwrap_or('1');
+        let selected_char = select_char(chars_at(i, &result)?).unwrap_or(default);
         result = result
             .to_owned()
             .into_iter()
             .filter_map(|s| {
                 let c = s.chars().nth(i)?;
-                if c == mcc {
+                if c == selected_char {
                     Some(s)
                 } else {
                     None
@@ -76,31 +88,6 @@ fn most_common_string(strings: &Vec<String>) -> Result<String> {
         .ok_or(anyhow!("failed to find most common string"))
 }
 
-fn least_common_string(strings: &Vec<String>) -> Result<String> {
-    let mut result: Vec<String> = strings.to_owned();
-    let mut i = 0;
-    while result.len() > 1 {
-        let lcc = least_common_char(chars_at(i, &result)?).unwrap_or('0');
-        result = result
-            .to_owned()
-            .into_iter()
-            .filter_map(|s| {
-                let c = s.chars().nth(i)?;
-                if c == lcc {
-                    Some(s)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        i += 1;
-    }
-    result
-        .into_iter()
-        .nth(0)
-        .ok_or(anyhow!("failed to find least common string"))
-}
-
 fn chars_at(index: usize, strings: &Vec<String>) -> Result<Vec<char>> {
     strings
         .iter()
@@ -113,34 +100,41 @@ fn chars_at(index: usize, strings: &Vec<String>) -> Result<Vec<char>> {
 }
 
 fn most_common_char<I: IntoIterator<Item = char>>(chars: I) -> Result<char> {
-    let counts = count_chars(chars);
-    let max = counts
-        .iter()
-        .max_by_key(|&(_, count)| count)
-        .ok_or(anyhow!("empty input"))?;
-    let n_of_maxes = counts.iter().filter(|&(_, count)| count == max.1).count();
-    if n_of_maxes > 1 {
-        return Err(anyhow!("more than one most common char"));
-    }
-    Ok(*max.0)
+    select_element_by_count(chars, |n1, n2| n1 > n2)
 }
 
 fn least_common_char<I: IntoIterator<Item = char>>(chars: I) -> Result<char> {
-    let counts = count_chars(chars);
-    let min = counts
-        .iter()
-        .min_by_key(|&(_, count)| count)
-        .ok_or(anyhow!("empty input"))?;
-    let n_of_mins = counts.iter().filter(|&(_, count)| count == min.1).count();
-    if n_of_mins > 1 {
-        return Err(anyhow!("more than one least common char"));
-    }
-    Ok(*min.0)
+    select_element_by_count(chars, |n1, n2| n1 < n2)
 }
 
-fn count_chars<I: IntoIterator<Item = char>>(chars: I) -> HashMap<char, usize> {
-    let mut counts = HashMap::<char, usize>::new();
-    for c in chars {
+fn select_element_by_count<T, I, F>(i: I, cmp_count: F) -> Result<T>
+where
+    I: IntoIterator<Item = T>,
+    T: Eq + Hash + Copy,
+    F: Fn(&usize, &usize) -> bool,
+{
+    let counts = count(i);
+    let selected = counts
+        .iter()
+        .reduce(|p1, p2| if cmp_count(p1.1, p2.1) { p1 } else { p2 })
+        .ok_or(anyhow!("empty input"))?;
+    let n_of_selected = counts
+        .iter()
+        .filter(|&(_, count)| count == selected.1)
+        .count();
+    if n_of_selected > 1 {
+        return Err(anyhow!("more than one selected elements"));
+    }
+    Ok(*selected.0)
+}
+
+fn count<T, I>(i: I) -> HashMap<T, usize>
+where
+    T: Eq + Hash,
+    I: IntoIterator<Item = T>,
+{
+    let mut counts = HashMap::<T, usize>::new();
+    for c in i {
         counts.entry(c).and_modify(|e| *e += 1).or_insert(0);
     }
     counts
